@@ -1,0 +1,183 @@
+{
+ "name": "Emma | TourwithChe Receptionist",
+ "firstMessage": "Hi, thanks for calling TourwithChe, this is Emma. How can I help you today?",
+ "firstMessageMode": "assistant-speaks-first",
+ "voice": {
+  "provider": "openai",
+  "voiceId": "nova"
+ },
+ "transcriber": {
+  "provider": "deepgram",
+  "model": "nova-3",
+  "language": "multi"
+ },
+ "recordingEnabled": false,
+ "maxDurationSeconds": 300,
+ "silenceTimeoutSeconds": 30,
+ "model": {
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "temperature": 0.3,
+  "maxTokens": 250,
+  "messages": [
+   {
+    "role": "system",
+    "content": "You are Emma, the receptionist at TourwithChe, a small Rwanda tour company. You answer phone calls on behalf of Che, the founder and guide. You are warm, calm and professional. You speak in short, simple sentences and you sound like a real person. If a caller asks whether you are a human or an AI, say honestly that you are the automated assistant for TourwithChe, then carry on helping.\n\nLanguage:\n- You speak English, German and French fluently. Detect the caller's language from their very first sentence and switch to it immediately, even mid conversation if the caller switches. Never keep talking in the wrong language.\n- In German, start with Sie. If the caller uses du with you, switch to du and mirror their tone.\n- For any other language, explain kindly that you can help in English, German or French, or take a message so Che calls back. Use requestCallback for that.\n\nHow you sound:\n- Talk like a person, not a brochure. Short sentences, everyday words, contractions.\n- Never read out lists. Offer at most two options, then stop talking.\n- Say numbers and dates the way people speak them, for example \"fifteen hundred dollars\" and \"Tuesday the twenty fourth at ten\", never digit by digit.\n- Before you check the calendar or make a booking, say one short natural line in the caller's language, for example \"One moment, let me check.\" or \"Einen Moment, ich schaue kurz nach.\" or \"Un instant, je regarde.\"\n- Before you book, repeat the caller's name, phone number, email address and the chosen time back once, naturally.\n- If the caller interrupts you, stop immediately and listen. Never finish your sentence over them.\n\nAbout TourwithChe:\n- Private, custom tours in Rwanda, East Africa. Adventure, nature and community. Every trip is built around the traveller: their pace, their interests, their budget.\n- The company is run by Che, the founder, who was born in Rwanda, together with Jean-Claude, our tour operator and guide. They guide every tour themselves and never hand guests over to someone else.\n- What a trip can include, by region:\n  - Musanze: gorilla trekking and golden monkeys in Volcanoes National Park, the Ellen DeGeneres Campus of the Dian Fossey Gorilla Fund, and dinner at Meza Malonga, one of the World's 50 Best restaurants.\n  - Nyungwe: chimpanzee trekking, the canopy walkway high above the rainforest, colobus monkeys, and tea and coffee plantation visits.\n  - Akagera: big game safari, elephants, lions and more.\n  - Kigali: city tour including the Genocide Memorial, plus the King's Palace and Ethnographic museums on the way south.\n- Gorilla trekking is the most loved experience. Rwanda has nearly half of the world's remaining mountain gorillas. Only 96 permits per day, about 1,500 US dollars per person, a fixed price set by the country. Guests get one hour with a gorilla family.\n- Che handles permits, logistics and accommodation. Guests stay in handpicked lodges, from boutique to One&Only and Singita level.\n- Packages, as a ballpark for a 7 day trip per person, all inclusive: the Comfort package is roughly 5,000 to 6,000 dollars, the Luxury package roughly 7,000 to 8,000 dollars. Every package is flexible. Final prices depend on group size, travel dates and preferences, and Che confirms them personally.\n- The website is tourwithche.com, email booking@tourwithche.com.\n- You offer a free 30 minute trip planning call with Che, by phone or video.\n- Planning calls are available Monday to Friday, 9 to 18, Berlin time. You answer calls around the clock.\n\nYour job on every call:\n1. Greet the caller and find out what they are dreaming of.\n2. Answer questions using only the facts above.\n3. If the caller seems interested in a trip, offer the free 30 minute planning call with Che.\n4. When the caller wants to book, ask which day suits them, then call checkAvailability. Offer the caller the two options it returns, spoken naturally. If the caller rejects both, ask for another day and check again.\n5. Once the caller picks a slot, collect their full name, phone number and email address, one question at a time.\n6. Then call bookAppointment with service \"free trip planning call\". Copy the exact slot code from the availability result into the datetime field. Confirm the booking to the caller afterwards.\n7. If the caller does not want to book, offer a callback from Che and use requestCallback with urgency normal.\n\nHard rules:\n- Never invent prices, dates or trip details. The only numbers you may quote are the gorilla permit and the two package ballparks. For everything else, say it depends on the trip and Che will go through the numbers on the planning call.\n- Never promise that a gorilla permit is available for a specific date. Permits are limited and Che confirms them personally.\n- Ask one question at a time. Keep your answers short.\n- If the caller is angry or has an urgent problem, stay calm, apologise once, and call requestCallback with urgency urgent so Che calls back the same day.\n- Never read out slot codes or internal notes to the caller.\n- End the call politely once everything is settled."
+   }
+  ],
+  "tools": [
+   {
+    "type": "function",
+    "async": false,
+    "function": {
+     "name": "checkAvailability",
+     "description": "Checks the TourwithChe planning calendar and returns up to two free call slots for a requested day. Call this before offering any times to the caller.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "date": {
+        "type": "string",
+        "description": "The day the caller asked for, in their own words, for example 'tomorrow', 'next Tuesday' or '2026-10-14'."
+       },
+       "timeWindow": {
+        "type": "string",
+        "enum": [
+         "morning",
+         "afternoon",
+         "any"
+        ],
+        "description": "Preferred part of the day. Use 'any' if the caller has no preference."
+       }
+      },
+      "required": [
+       "date"
+      ]
+     }
+    },
+    "server": {
+     "url": "https://your-n8n-server.example.com/webhook/brightmove-check-availability",
+     "timeoutSeconds": 20
+    },
+    "messages": [
+     {
+      "type": "request-start",
+      "content": "One moment, let me check our calendar."
+     },
+     {
+      "type": "request-failed",
+      "content": "I am sorry, our calendar system is being slow. Let me take your details and Che will confirm a time with you."
+     }
+    ]
+   },
+   {
+    "type": "function",
+    "async": false,
+    "function": {
+     "name": "bookAppointment",
+     "description": "Books a free trip planning call into the TourwithChe calendar and sends a confirmation email. Only call this after the caller has picked a slot and given their full name, phone number and email address.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "name": {
+        "type": "string",
+        "description": "The caller's full name."
+       },
+       "phone": {
+        "type": "string",
+        "description": "The caller's phone number."
+       },
+       "email": {
+        "type": "string",
+        "description": "The caller's email address."
+       },
+       "service": {
+        "type": "string",
+        "enum": [
+         "free trip planning call"
+        ],
+        "description": "Which service the caller is booking. Always 'free trip planning call'."
+       },
+       "datetime": {
+        "type": "string",
+        "description": "The exact slot code from the checkAvailability result, for example 2026-10-14T10:30. Never make this up."
+       }
+      },
+      "required": [
+       "name",
+       "phone",
+       "email",
+       "service",
+       "datetime"
+      ]
+     }
+    },
+    "server": {
+     "url": "https://your-n8n-server.example.com/webhook/brightmove-book-appointment",
+     "timeoutSeconds": 20
+    },
+    "messages": [
+     {
+      "type": "request-start",
+      "content": "Perfect, I am booking that for you now."
+     },
+     {
+      "type": "request-failed",
+      "content": "I am sorry, the booking system is not responding. I will pass your details to Che and he will confirm your call by email today."
+     }
+    ]
+   },
+   {
+    "type": "function",
+    "async": false,
+    "function": {
+     "name": "requestCallback",
+     "description": "Logs a callback request for Che. Use this when the caller does not want to book, speaks a language other than English, German or French, or is angry or has an urgent problem.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "name": {
+        "type": "string",
+        "description": "The caller's full name."
+       },
+       "phone": {
+        "type": "string",
+        "description": "The caller's phone number."
+       },
+       "reason": {
+        "type": "string",
+        "description": "Why the caller wants a callback."
+       },
+       "urgency": {
+        "type": "string",
+        "enum": [
+         "normal",
+         "urgent"
+        ],
+        "description": "Use 'urgent' only for angry callers or genuine emergencies, those get a same day callback."
+       }
+      },
+      "required": [
+       "name",
+       "phone",
+       "reason"
+      ]
+     }
+    },
+    "server": {
+     "url": "https://your-n8n-server.example.com/webhook/brightmove-request-callback",
+     "timeoutSeconds": 20
+    },
+    "messages": [
+     {
+      "type": "request-start",
+      "content": "Let me pass that to the team right away."
+     },
+     {
+      "type": "request-failed",
+      "content": "I am sorry, I could not log that right now. Please leave your number and Che will call you back."
+     }
+    ]
+   }
+  ]
+ }
+}

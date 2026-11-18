@@ -1,0 +1,188 @@
+{
+  "name": "TourwithChe C | Weekly Owner Digest",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": ["1"],
+              "triggerAtHour": 8,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "c1d2e3f4-0001-4a01-9a01-0000000000c1",
+      "name": "Weekly Monday 8am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-900, 300]
+    },
+    {
+      "parameters": {
+        "resource": "sheetWithinDocument",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "TourwithChe Leads"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "Leads"
+        },
+        "options": {}
+      },
+      "id": "c1d2e3f4-0002-4a02-9a02-0000000000c2",
+      "name": "Read Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [-660, 200],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "resource": "sheetWithinDocument",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "TourwithChe Leads"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "Follow-ups"
+        },
+        "options": {}
+      },
+      "id": "c1d2e3f4-0003-4a03-9a03-0000000000c3",
+      "name": "Read Follow-ups",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [-660, 420],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({ json: { ...item.json, rowType: 'lead' } }));"
+      },
+      "id": "c1d2e3f4-0004-4a04-9a04-0000000000c4",
+      "name": "Tag leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-420, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({ json: { ...item.json, rowType: 'followup' } }));"
+      },
+      "id": "c1d2e3f4-0005-4a05-9a05-0000000000c5",
+      "name": "Tag follow-ups",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-420, 420]
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 2
+      },
+      "id": "c1d2e3f4-0006-4a06-9a06-0000000000c6",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [-180, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const { DateTime } = require('luxon');\nconst ZONE = 'Europe/Berlin';\nconst items = $input.all().map(i => i.json);\nconst leads = items.filter(x => x.rowType === 'lead');\nconst followUps = items.filter(x => x.rowType === 'followup');\nconst now = DateTime.now().setZone(ZONE);\nconst weekStart = now.minus({ days: 7 }).toISODate();\nconst recent = leads.filter(x => x.Date && String(x.Date) >= weekStart);\nconst norm = v => String(v || '').toLowerCase().trim();\nconst booked = recent.filter(x => norm(x.Outcome) === 'booked');\nconst callbacks = recent.filter(x => norm(x.Outcome) === 'callback requested');\nconst noBooking = recent.filter(x => norm(x.Outcome) === 'no booking');\nconst openFollowUps = followUps.filter(x => norm(x.Status) === 'open');\nconst lines = [];\nlines.push('Weekly call digest for TourwithChe.');\nlines.push('Week ending ' + now.toFormat('dd LLL yyyy') + ' (Berlin time).');\nlines.push('');\nlines.push('Calls this week: ' + recent.length);\nlines.push('Bookings made: ' + booked.length);\nlines.push('Callbacks requested: ' + callbacks.length);\nlines.push('No booking: ' + noBooking.length);\nlines.push('');\nif (booked.length) {\n  lines.push('Bookings:');\n  booked.forEach(x => lines.push('- ' + x.Date + ' ' + (x.Time || '') + ' | ' + (x.Caller || 'unknown') + ' | ' + (x.Summary || '')));\n  lines.push('');\n}\nif (openFollowUps.length) {\n  lines.push('Open follow-ups:');\n  openFollowUps.forEach(x => lines.push('- due ' + (x['Follow-up date'] || '?') + ' | ' + (x.Caller || 'unknown') + ' | ' + (x.Reason || '')));\n  lines.push('');\n} else {\n  lines.push('No open follow-ups.');\n  lines.push('');\n}\nconst withSummary = recent.filter(x => x.Summary);\nif (withSummary.length) {\n  lines.push('Recent call summaries:');\n  withSummary.slice(0, 5).forEach(x => lines.push('- ' + x.Date + ' | ' + (x.Caller || 'unknown') + ' | ' + x.Summary));\n}\nconst body = lines.join('\\n');\nconst subject = 'BrightMove weekly digest, week ending ' + now.toFormat('dd LLL yyyy');\nreturn [{ json: { subject, body } }];"
+      },
+      "id": "c1d2e3f4-0007-4a07-9a07-0000000000c7",
+      "name": "Build digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [60, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "owner@example.com",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "id": "c1d2e3f4-0008-4a08-9a08-0000000000c8",
+      "name": "Email weekly digest",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [300, 300]
+    }
+  ],
+  "connections": {
+    "Weekly Monday 8am": {
+      "main": [
+        [
+          { "node": "Read Leads", "type": "main", "index": 0 },
+          { "node": "Read Follow-ups", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Read Leads": {
+      "main": [
+        [
+          { "node": "Tag leads", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Read Follow-ups": {
+      "main": [
+        [
+          { "node": "Tag follow-ups", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Tag leads": {
+      "main": [
+        [
+          { "node": "Merge", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Tag follow-ups": {
+      "main": [
+        [
+          { "node": "Merge", "type": "main", "index": 1 }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          { "node": "Build digest", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Build digest": {
+      "main": [
+        [
+          { "node": "Email weekly digest", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

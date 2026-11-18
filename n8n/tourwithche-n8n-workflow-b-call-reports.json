@@ -1,0 +1,276 @@
+{
+  "name": "TourwithChe B | End-of-call report (sheet log + owner summary + follow-up queue)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "brightmove-end-of-call",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "1302306b588f40f1",
+      "name": "WH end-of-call report",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1000,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse the Vapi end-of-call report (and ignore other server messages downstream).\nconst { DateTime } = require('luxon');\nconst ZONE = 'Europe/Berlin';\nconst body = $json.body || $json;\nconst msg = body.message || body;\nconst call = msg.call || {};\nconst analysis = msg.analysis || {};\nconst artifact = msg.artifact || {};\n\nconst messages = Array.isArray(artifact.messages) ? artifact.messages : [];\nconst transcript = (msg.transcript && String(msg.transcript).trim())\n  ? String(msg.transcript)\n  : messages.map(m => ((m.role || 'unknown') + ': ' + (m.message || m.content || '')).trim()).filter(Boolean).join('\\n');\n\nconst summary = String(msg.summary || analysis.summary || '').trim();\nconst caller = (call.customer && call.customer.number) || 'unknown';\nconst started = msg.startedAt || call.startedAt || '';\nconst ended = msg.endedAt || call.endedAt || '';\nlet durationSec = '';\nif (started && ended) {\n  durationSec = Math.max(0, Math.round((new Date(ended) - new Date(started)) / 1000));\n}\nconst blob = JSON.stringify(messages) + JSON.stringify(msg.toolCalls || []) + JSON.stringify(msg.toolCallResults || []);\nconst booked = blob.indexOf('Booked:') !== -1;\nconst callback = blob.indexOf('requestCallback') !== -1;\nconst outcome = booked ? 'booked' : (callback ? 'callback requested' : 'no booking');\n\nconst now = DateTime.now().setZone(ZONE);\nconst date = now.toISODate();\nconst time = now.toFormat('HH:mm');\nconst followUpDate = now.plus({ days: 1 }).toISODate();\nconst shortTranscript = transcript.split('\\n').slice(0, 12).join('\\n');\n\nreturn [{ json: {\n  type: msg.type || '',\n  caller, durationSec, outcome, summary, shortTranscript,\n  date, time, followUpDate\n}}];"
+      },
+      "id": "a38c6b1cbf834de5",
+      "name": "Parse call report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -780,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b98cf22c2b37461b",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "end-of-call-report",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.string.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c92d8610332f48ff",
+      "name": "IF end-of-call report",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -560,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "TourwithChe Leads",
+          "mode": "name"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $json.date }}",
+            "Time": "={{ $json.time }}",
+            "Caller": "={{ $json.caller }}",
+            "Duration (s)": "={{ $json.durationSec }}",
+            "Outcome": "={{ $json.outcome }}",
+            "Summary": "={{ $json.summary }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "b2d38f0f8eb44ba2",
+      "name": "Log call to Leads sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -340,
+        -80
+      ],
+      "settings": {
+        "executeOnce": true,
+        "alwaysOutputData": true
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "sendTo": "owner@example.com",
+        "subject": "=Call summary: {{ $json.outcome }} - {{ $json.caller }}",
+        "emailType": "text",
+        "message": "=New call handled by Emma.\n\nOutcome: {{ $json.outcome }}\nCaller: {{ $json.caller }}\nDuration: {{ $json.durationSec }} seconds\nDate: {{ $json.date }} {{ $json.time }} Berlin\n\nSummary:\n{{ $json.summary || 'No summary available.' }}\n\nTranscript excerpt:\n{{ $json.shortTranscript || 'No transcript available.' }}\n\n{{ $json.outcome === 'booked' ? 'The appointment is in the TourwithChe Planning calendar.' : 'No booking. This caller is queued for follow-up tomorrow.' }}",
+        "options": {}
+      },
+      "id": "b285fdeae0104999",
+      "name": "Email owner call summary",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -120,
+        -80
+      ],
+      "settings": {
+        "executeOnce": true
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d03d7108d6784140",
+              "leftValue": "={{ $json.outcome }}",
+              "rightValue": "booked",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals",
+                "name": "filter.operator.string.notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "56819175360f456c",
+      "name": "IF no booking",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        100,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "TourwithChe Leads",
+          "mode": "name"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Follow-ups",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Follow-up date": "={{ $json.followUpDate }}",
+            "Caller": "={{ $json.caller }}",
+            "Reason": "={{ $json.outcome }}",
+            "Status": "open"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "42a711e3099849b7",
+      "name": "Queue follow-up",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        320,
+        -160
+      ],
+      "settings": {
+        "executeOnce": true,
+        "alwaysOutputData": true
+      }
+    }
+  ],
+  "connections": {
+    "WH end-of-call report": {
+      "main": [
+        [
+          {
+            "node": "Parse call report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse call report": {
+      "main": [
+        [
+          {
+            "node": "IF end-of-call report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF end-of-call report": {
+      "main": [
+        [
+          {
+            "node": "Log call to Leads sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log call to Leads sheet": {
+      "main": [
+        [
+          {
+            "node": "Email owner call summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email owner call summary": {
+      "main": [
+        [
+          {
+            "node": "IF no booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF no booking": {
+      "main": [
+        [
+          {
+            "node": "Queue follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Europe/Berlin",
+    "executionOrder": "v1"
+  },
+  "active": false
+}
